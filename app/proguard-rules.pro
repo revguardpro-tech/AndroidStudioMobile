@@ -1,0 +1,7 @@
+-keep class com.androidstudiomobile.** { *; }
+-keep class org.eclipse.jgit.** { *; }
+-keepattributes *Annotation*, SourceFile, LineNumberTable
+-dontwarn org.slf4j.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.conscrypt.**
+-dontwarn org.openjsse.**

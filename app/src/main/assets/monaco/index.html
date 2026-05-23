@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Monaco Editor</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body,#editor { width:100%; height:100vh; background:#2B2B2B; overflow:hidden; }
+#loading { position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:#2B2B2B;color:#ccc;font-family:monospace;font-size:14px;z-index:999; }
+#err-panel { position:fixed;bottom:0;left:0;right:0;background:#252526;border-top:1px solid #3a3a3a;
+  max-height:140px;overflow-y:auto;display:none;z-index:100; }
+.err-item { padding:3px 10px;font-family:monospace;font-size:11px;cursor:pointer;
+  display:flex;gap:8px;align-items:center; }
+.err-item:hover { background:#2a2d2e; }
+.err-E { color:#f44747; } .err-W { color:#ff8c00; } .err-I { color:#75beff; }
+#gd-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;
+  align-items:center;justify-content:center;z-index:400; }
+#gd-box { background:#252526;border:1px solid #454545;border-radius:8px;
+  width:92%;max-height:72%;overflow-y:auto;padding:16px; }
+#gd-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:10px; }
+#gd-title { color:#d4d4d4;font-size:13px;font-weight:bold;font-family:monospace; }
+#gd-close { cursor:pointer;color:#808080;font-size:18px; }
+.gd-item { padding:8px;border-radius:4px;cursor:pointer;margin-bottom:3px; }
+.gd-item:hover { background:#2a2d2e; }
+.gd-file { color:#4ec9b0;font-size:12px; }
+.gd-line { color:#808080;font-size:11px; }
+.gd-kind { color:#9876aa;font-size:10px;margin-left:6px; }
+.gd-snippet { color:#a9b7c6;font-size:11px;font-family:monospace;margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+#kls-badge { position:fixed;bottom:2px;right:6px;font-size:9px;font-family:monospace;
+  color:#808080;pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="loading">⏳ Loading Monaco…</div>
+<div id="editor"></div>
+<div id="err-panel"></div>
+<div id="gd-overlay">
+  <div id="gd-box">
+    <div id="gd-header">
+      <span id="gd-title">Go to Definition</span>
+      <span id="gd-close">✕</span>
+    </div>
+    <div id="gd-list"></div>
+  </div>
+</div>
+<div id="kls-badge">KLS: off</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"
+  onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.min.js'"></script>
+<script>
+'use strict';
+let editor=null, currentLang='kotlin', lspWs=null, klsReady=false;
+let gdResults=[];
+
+require.config({paths:{vs:'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'}});
+require(['vs/editor/editor.main'], () => {
+  document.getElementById('loading').style.display='none';
+
+  // ── Kotlin language ───────────────────────────────────────────────────
+  monaco.languages.register({id:'kotlin',aliases:['Kotlin','kt']});
+  monaco.languages.setMonarchTokensProvider('kotlin',{
+    keywords:['package','import','class','interface','object','fun','val','var','if','else','when',
+      'while','for','do','return','break','continue','throw','try','catch','finally','as','is',
+      'in','!in','!is','this','super','null','true','false','by','companion','data','sealed',
+      'abstract','open','override','final','private','protected','public','internal','inline',
+      'suspend','enum','annotation','typealias','operator','infix','crossinline','reified',
+      'vararg','const','lateinit','external','actual','expect','where','init','constructor'],
+    typeKeywords:['String','Int','Long','Double','Float','Boolean','Char','Byte','Short','Unit',
+      'Any','Nothing','List','MutableList','Map','MutableMap','Set','MutableSet','Array',
+      'Flow','StateFlow','MutableStateFlow','Job','ViewModel','Context','Composable'],
+    operators:['=','==','!=','<','>','<=','>=','&&','||','!','+','-','*','/','%','..','?.','::','->'],
+    symbols:/[=><!~?:&|+\-*\/\^%]+/,
+    tokenizer:{
+      root:[
+        [/@[a-zA-Z_$][\w$]*/,'annotation'],
+        [/[a-zA-Z_$][\w$]*/,{cases:{'@keywords':'keyword','@typeKeywords':'type','@default':'identifier'}}],
+        [/\/\/.*$/,'comment'],
+        [/\/\*\*/,'comment.doc','@doccomment'],
+        [/\/\*/,'comment','@comment'],
+        [/"(?:[^"\\]|\\.)*"/,'string'],
+        [/0x[\da-fA-F]+[lL]?/,'number.hex'],
+        [/\d+\.?\d*([eE][-+]?\d+)?[fFdD]?/,'number'],
+      ],
+      comment:[[/[^/*]+/,'comment'],[/\/\*/,'comment','@push'],[/\*\//,'comment','@pop'],[/[/*]/,'comment']],
+      doccomment:[[/@\w+/,'comment.doc.tag'],[/[^/*]+/,'comment.doc'],[/\*\//,'comment.doc','@pop'],[/[/*]/,'comment.doc']],
+    }
+  });
+
+  // ── Darcula theme ─────────────────────────────────────────────────────
+  monaco.editor.defineTheme('darcula',{
+    base:'vs-dark',inherit:true,
+    rules:[
+      {token:'keyword',foreground:'CC7832',fontStyle:'bold'},
+      {token:'type',foreground:'FFC66D'},
+      {token:'annotation',foreground:'BBB529'},
+      {token:'comment',foreground:'808080',fontStyle:'italic'},
+      {token:'comment.doc',foreground:'629755',fontStyle:'italic'},
+      {token:'comment.doc.tag',foreground:'629755',fontStyle:'bold italic'},
+      {token:'string',foreground:'6A8759'},
+      {token:'number',foreground:'6897BB'},
+      {token:'identifier',foreground:'A9B7C6'},
+    ],
+    colors:{
+      'editor.background':'#2B2B2B','editor.foreground':'#A9B7C6',
+      'editorCursor.foreground':'#BBBBBB','editor.lineHighlightBackground':'#323232',
+      'editorLineNumber.foreground':'#606366','editorLineNumber.activeForeground':'#A4A3A3',
+      'editor.selectionBackground':'#214283','editorBracketMatch.background':'#3B514D',
+      'editorError.foreground':'#BC3F3C','editorWarning.foreground':'#E8BF6A',
+      'editorGutter.background':'#2B2B2B',
+    }
+  });
+
+  editor=monaco.editor.create(document.getElementById('editor'),{
+    value:'// Open a file to start editing',
+    language:'kotlin',theme:'darcula',
+    fontSize:14,fontFamily:"'JetBrains Mono','Cascadia Code','Fira Code',monospace",
+    fontLigatures:true,lineNumbers:'on',
+    minimap:{enabled:true,maxColumn:80},scrollBeyondLastLine:false,
+    wordWrap:'off',automaticLayout:true,tabSize:4,insertSpaces:true,
+    renderWhitespace:'selection',
+    bracketPairColorization:{enabled:true},guides:{bracketPairs:true,indentation:true},
+    suggestOnTriggerCharacters:true,
+    quickSuggestions:{other:true,comments:false,strings:false},
+    parameterHints:{enabled:true},smoothScrolling:true,cursorBlinking:'smooth',
+    renderLineHighlight:'all',occurrencesHighlight:'singleFile',
+    folding:true,foldingStrategy:'auto',showFoldingControls:'always',
+    stickyScroll:{enabled:true},colorDecorators:true,accessibilitySupport:'off',
+    scrollbar:{verticalScrollbarSize:8,horizontalScrollbarSize:8},
+  });
+
+  // ── Kotlin snippets ───────────────────────────────────────────────────
+  monaco.languages.registerCompletionItemProvider('kotlin',{
+    provideCompletionItems(model,pos){
+      const w=model.getWordUntilPosition(pos);
+      const r={startLineNumber:pos.lineNumber,endLineNumber:pos.lineNumber,startColumn:w.startColumn,endColumn:w.endColumn};
+      const s=(lbl,txt,detail,sort)=>({label:lbl,kind:monaco.languages.CompletionItemKind.Snippet,
+        insertTextRules:monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        insertText:txt,detail:detail||'',sortText:sort||lbl,range:r});
+      return{suggestions:[
+        s('fun','fun ${1:name}(${2:params}): ${3:Unit} {\n\t${0}\n}','Function'),
+        s('class','class ${1:Name}(${2:params}) {\n\t${0}\n}','Class'),
+        s('data class','data class ${1:Name}(\n\tval ${2:prop}: ${3:Type}\n)','Data class'),
+        s('sealed class','sealed class ${1:Name} {\n\tdata class ${2:Success}(val data: ${3:T}) : ${1:Name}()\n\tobject Error : ${1:Name}()\n\tobject Loading : ${1:Name}()\n}','Sealed class'),
+        s('object','object ${1:Name} {\n\t${0}\n}','Object declaration'),
+        s('companion','companion object {\n\t${0}\n}','Companion object'),
+        s('interface','interface ${1:Name} {\n\t${0}\n}','Interface'),
+        s('enum class','enum class ${1:Name} {\n\t${2:VALUE1}, ${3:VALUE2}\n}','Enum'),
+        s('when','when (${1:expr}) {\n\t${2:cond} -> ${3}\n\telse -> ${0}\n}','When expression'),
+        s('if','if (${1:condition}) {\n\t${0}\n}','If block'),
+        s('for','for (${1:item} in ${2:collection}) {\n\t${0}\n}','For loop'),
+        s('while','while (${1:condition}) {\n\t${0}\n}','While loop'),
+        s('try','try {\n\t${1}\n} catch (e: ${2:Exception}) {\n\t${0}\n}','Try-catch'),
+        s('coroutine','viewModelScope.launch {\n\t${0}\n}','Launch coroutine'),
+        s('withContext','withContext(Dispatchers.${1:IO}) {\n\t${0}\n}','withContext'),
+        s('flow','flow {\n\temit(${1:value})\n}','Flow builder'),
+        s('stateflow','private val _${1:name} = MutableStateFlow<${2:T}>(${3:initial})\nval ${1:name}: StateFlow<${2:T}> = _${1:name}.asStateFlow()','StateFlow pair'),
+        s('collect','viewModelScope.launch {\n\t${1:flow}.collect { ${2:value} ->\n\t\t${0}\n\t}\n}','Collect flow'),
+        s('compose','@Composable\nfun ${1:Name}(modifier: Modifier = Modifier) {\n\t${0}\n}','Composable'),
+        s('scaffold','Scaffold(\n\ttopBar = { TopAppBar(title = { Text("${1:Title}") }) },\n\tfloatingActionButton = { FloatingActionButton(onClick = { ${2} }) { Icon(Icons.Default.Add, null) } }\n) { padding ->\n\t${0}\n}','Scaffold'),
+        s('column','Column(\n\tmodifier = ${1:Modifier},\n\tverticalArrangement = Arrangement.${2:spacedBy(8.dp)}\n) {\n\t${0}\n}','Column'),
+        s('row','Row(\n\tmodifier = ${1:Modifier},\n\thorizontalArrangement = Arrangement.${2:spacedBy(8.dp)},\n\tverticalAlignment = Alignment.${3:CenterVertically}\n) {\n\t${0}\n}','Row'),
+        s('lazy','LazyColumn(\n\tcontentPadding = PaddingValues(${1:16.dp}),\n\tverticalArrangement = Arrangement.spacedBy(${2:8.dp})\n) {\n\titems(${3:list}) { item ->\n\t\t${0}\n\t}\n}','LazyColumn'),
+        s('card','Card(\n\tmodifier = ${1:Modifier.fillMaxWidth()},\n\televation = CardDefaults.cardElevation(${2:4.dp})\n) {\n\t${0}\n}','Card'),
+        s('viewmodel','class ${1:Name}ViewModel(app: Application) : AndroidViewModel(app) {\n\tprivate val _state = MutableStateFlow(${2:State}())\n\tval state: StateFlow<${2:State}> = _state.asStateFlow()\n}','ViewModel'),
+        s('room entity','@Entity(tableName = "${1:table}")\ndata class ${2:Entity}(\n\t@PrimaryKey(autoGenerate = true) val id: Long = 0,\n\tval ${3:field}: ${4:String}\n)','Room Entity'),
+        s('dao','@Dao\ninterface ${1:Name}Dao {\n\t@Query("SELECT * FROM ${2:table}")\n\tfun getAll(): Flow<List<${3:Entity}>>\n\t@Insert(onConflict = OnConflictStrategy.REPLACE)\n\tsuspend fun insert(item: ${3:Entity})\n\t@Delete\n\tsuspend fun delete(item: ${3:Entity})\n}','Room DAO'),
+        s('log','android.util.Log.${1|d,i,w,e|}("${2:TAG}", "${3:message}")','Log statement'),
+        s('intent','Intent(this, ${1:Activity}::class.java).also {\n\tit.putExtra("${2:key}", ${3:value})\n\tstartActivity(it)\n}','Intent'),
+        s('permission','if (ContextCompat.checkSelfPermission(this, Manifest.permission.${1:CAMERA}) != PackageManager.PERMISSION_GRANTED) {\n\tActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.${1:CAMERA}), ${2:100})\n}','Permission check'),
+        s('viewbinding','private lateinit var binding: ${1:Activity}Binding\nbinding = ${1:Activity}Binding.inflate(layoutInflater)\nsetContentView(binding.root)','ViewBinding'),
+      ]};
+    }
+  });
+
+  // Hover: ask Android
+  monaco.languages.registerHoverProvider('kotlin',{
+    async provideHover(model,pos){
+      const w=model.getWordAtPosition(pos);
+      if(!w) return null;
+      let info='';
+      try { info=await new Promise(res=>{ Android.onHoverRequest(w.word); setTimeout(()=>res(''),300); }); } catch(_){}
+      return info ? {contents:[{value:info}]} : null;
+    }
+  });
+
+  // ── Keybindings ───────────────────────────────────────────────────────
+  editor.addCommand(monaco.KeyMod.CtrlCmd|monaco.KeyCode.KeyS, ()=>Android?.onSave?.(editor.getValue()));
+  editor.addCommand(monaco.KeyMod.CtrlCmd|monaco.KeyCode.KeyD, ()=>editor.trigger('','editor.action.duplicateSelection',{}));
+  editor.addCommand(monaco.KeyMod.CtrlCmd|monaco.KeyCode.Slash, ()=>editor.trigger('','editor.action.commentLine',{}));
+  editor.addCommand(monaco.KeyMod.CtrlCmd|monaco.KeyCode.KeyK, ()=>editor.trigger('','editor.action.formatDocument',{}));
+  editor.addCommand(monaco.KeyMod.CtrlCmd|monaco.KeyCode.KeyB, ()=>goToDefinition());
+  editor.addCommand(monaco.KeyMod.Alt|monaco.KeyCode.F7,       ()=>findUsages());
+  editor.addCommand(monaco.KeyCode.F2, ()=>editor.trigger('','editor.action.rename',{}));
+
+  editor.addAction({id:'goto-def',label:'Go to Definition (Ctrl+B)',contextMenuGroupId:'navigation',contextMenuOrder:1,run:goToDefinition});
+  editor.addAction({id:'find-usages',label:'Find Usages (Alt+F7)',contextMenuGroupId:'navigation',contextMenuOrder:2,run:findUsages});
+  editor.addAction({id:'get-kdoc',label:'Quick Documentation',contextMenuGroupId:'navigation',contextMenuOrder:3,
+    run:()=>{ const w=editor.getModel().getWordAtPosition(editor.getPosition()); if(w) Android?.onGetDoc?.(w.word); }});
+
+  // ── Content changes ───────────────────────────────────────────────────
+  let lintTimer=null;
+  editor.onDidChangeModelContent(()=>{
+    const c=editor.getValue();
+    Android?.onContentChanged?.(c);
+    clearTimeout(lintTimer);
+    lintTimer=setTimeout(()=>Android?.onLintRequest?.(c, currentLang), 1500);
+  });
+  editor.onDidChangeCursorPosition(e=>{
+    Android?.onCursorMoved?.(e.position.lineNumber, e.position.column);
+  });
+
+  // ── Go To Definition ─────────────────────────────────────────────────
+  function goToDefinition(){
+    const w=editor.getModel().getWordAtPosition(editor.getPosition());
+    if(w) Android?.onGoToDefinition?.(w.word);
+  }
+  function findUsages(){
+    const w=editor.getModel().getWordAtPosition(editor.getPosition());
+    if(w) Android?.onFindUsages?.(w.word);
+  }
+
+  // GD panel setup
+  document.getElementById('gd-close').onclick=closeGd;
+  document.getElementById('gd-overlay').addEventListener('click',e=>{if(e.target.id==='gd-overlay')closeGd();});
+  function closeGd(){ document.getElementById('gd-overlay').style.display='none'; }
+
+  // ── KLS connection ────────────────────────────────────────────────────
+  window.connectKls=function(port){
+    lspWs=new WebSocket('ws://localhost:'+port);
+    lspWs.onopen=()=>{ klsReady=true; updateKlsBadge('✓',true); };
+    lspWs.onclose=()=>{ klsReady=false; updateKlsBadge('off',false); setTimeout(()=>connectKls(port),5000); };
+    lspWs.onerror=()=>{ klsReady=false; };
+  };
+  function updateKlsBadge(s,ok){
+    const b=document.getElementById('kls-badge');
+    b.textContent='KLS: '+s;
+    b.style.color=ok?'#4CAF50':'#808080';
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────
+  window.Editor={
+    setValue(code,lang){ currentLang=lang||currentLang; monaco.editor.setModelLanguage(editor.getModel(),currentLang); editor.setValue(code||''); },
+    getValue(){ return editor?.getValue()||''; },
+    setLanguage(l){ currentLang=l; monaco.editor.setModelLanguage(editor.getModel(),l); },
+    setMarkers(json){
+      try{
+        const ms=JSON.parse(json);
+        const model=editor.getModel();
+        monaco.editor.setModelMarkers(model,'lint',ms.map(m=>({
+          startLineNumber:m.line,startColumn:m.column||1,
+          endLineNumber:m.line,endColumn:(m.column||1)+60,
+          message:m.message,severity:m.severity==='ERROR'?monaco.MarkerSeverity.Error:m.severity==='WARNING'?monaco.MarkerSeverity.Warning:monaco.MarkerSeverity.Info,
+          source:m.rule||'lint'
+        })));
+        updateErrPanel(ms);
+      }catch(e){}
+    },
+    showDefinitions(json){
+      try{
+        const rs=JSON.parse(json);
+        gdResults=rs;
+        if(!rs.length){ return; }
+        if(rs.length===1){ Android?.onNavigateToFile?.(rs[0].filePath, rs[0].line); return; }
+        document.getElementById('gd-title').textContent=`Definitions (${rs.length})`;
+        document.getElementById('gd-list').innerHTML=rs.map((r,i)=>
+          `<div class="gd-item" onclick="navigateTo(${i})">
+            <div><span class="gd-file">${esc(r.fileName)}</span><span class="gd-line"> :${r.line}</span><span class="gd-kind">${r.kind||''}</span></div>
+            <div class="gd-snippet">${esc(r.snippet)}</div>
+           </div>`).join('');
+        document.getElementById('gd-overlay').style.display='flex';
+      }catch(e){}
+    },
+    gotoLine(line,col){ editor?.revealLineInCenter(line); editor?.setPosition({lineNumber:line,column:col||1}); editor?.focus(); },
+    format(){ editor?.trigger('','editor.action.formatDocument',{}); },
+    undo(){ editor?.trigger('','undo',{}); },
+    redo(){ editor?.trigger('','redo',{}); },
+    setFontSize(n){ editor?.updateOptions({fontSize:n}); },
+    setWordWrap(on){ editor?.updateOptions({wordWrap:on?'on':'off'}); },
+    setMinimap(on){ editor?.updateOptions({minimap:{enabled:on}}); },
+    setTheme(t){ monaco.editor.setTheme(t||'darcula'); },
+    connectKls(port){ connectKls(port); },
+    foldAll(){ editor?.trigger('','editor.foldAll',{}); },
+    unfoldAll(){ editor?.trigger('','editor.unfoldAll',{}); },
+    getPosition(){ const p=editor?.getPosition(); return p?`${p.lineNumber}:${p.column}`:'1:1'; },
+  };
+
+  window.navigateTo=function(i){ const r=gdResults[i]; if(r){ Android?.onNavigateToFile?.(r.filePath,r.line); closeGd(); } };
+  window.gotoLine=function(line){ editor?.revealLineInCenter(line); editor?.setPosition({lineNumber:line,column:1}); };
+
+  function updateErrPanel(ms){
+    const p=document.getElementById('err-panel');
+    if(!ms.length){ p.style.display='none'; return; }
+    p.style.display='block';
+    p.innerHTML=ms.slice(0,15).map(m=>`<div class="err-item err-${m.severity?.[0]||'I'}" onclick="gotoLine(${m.line})"><span>${m.severity==='ERROR'?'✖':m.severity==='WARNING'?'⚠':'ℹ'}</span><span>:${m.line}</span><span>${esc(m.message)}</span></div>`).join('');
+  }
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  Android?.onEditorReady?.();
+});
+</script>
+</body>
+</html>
