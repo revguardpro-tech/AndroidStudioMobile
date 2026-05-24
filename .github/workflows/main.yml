@@ -100,13 +100,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create gradle/wrapper directory
-        run: mkdir -p gradle/wrapper
-
-      - name: Download gradle-wrapper.jar from correct source
-        run: |
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar
-
       - name: Grant gradlew permission
         run: chmod +x gradlew
 
