@@ -77,6 +77,7 @@ case "$(uname)" in
     ;;
 esac
 
+APP_HOME="."
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
 
