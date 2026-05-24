@@ -1,23 +1,15 @@
 package com.androidstudiomobile.lint
-import com.androidstudiomobile.data.model.LintIssue
-import com.androidstudiomobile.data.model.LintSeverity
+import java.io.File
 
-object LintEngine {
-    fun lint(content: String, language: String): List<LintIssue> = when (language) {
-        "kotlin","kt" -> lintKotlin(content)
-        "java"        -> lintJava(content)
-        "xml"         -> lintXml(content)
-        "json"        -> lintJson(content)
-        else          -> emptyList()
-    }
+enum class LintSeverity { INFO, WARNING, ERROR }
+data class LintIssue(val line: Int, val column: Int, val message: String, val severity: LintSeverity, val id: String)
 
+class LintEngine {
     fun lintKotlin(content: String): List<LintIssue> {
         val issues = mutableListOf<LintIssue>()
         val lines = content.lines()
         lines.forEachIndexed { idx, line ->
             val ln = idx + 1; val t = line.trim()
-            if (t.contains("!!"))
-                issues += LintIssue(ln, line.indexOf("!!")+1, "Unsafe non-null assertion (!!)", LintSeverity.WARNING, "unsafe-nonnull")
             if (t.startsWith("import") && t.contains(".*"))
                 issues += LintIssue(ln, 1, "Wildcard import", LintSeverity.WARNING, "wildcard-import")
             if (Regex("""System\.out\.print""").containsMatchIn(t))
@@ -26,7 +18,7 @@ object LintEngine {
                 issues += LintIssue(ln, line.indexOf("GlobalScope")+1, "Avoid GlobalScope — use viewModelScope or lifecycleScope", LintSeverity.WARNING, "global-scope")
             if (t.contains("Thread.sleep("))
                 issues += LintIssue(ln, 1, "Thread.sleep() on main thread will block UI", LintSeverity.WARNING, "thread-sleep")
-            if (t.contains("TODO()") || t.contains("TODO(""""))
+            if (t.contains("TODO()") || t.contains("TODO(\"\"\"\""))
                 issues += LintIssue(ln, line.indexOf("TODO")+1, "Incomplete implementation: TODO", LintSeverity.INFO, "todo")
         }
         return issues
@@ -52,9 +44,9 @@ object LintEngine {
         val lines = content.lines()
         lines.forEachIndexed { idx, line ->
             val ln = idx + 1; val t = line.trim()
-            if (t.contains("android:text="") && !t.contains("@string/") && !t.contains("android:text="@") && t.length > 20)
+            if (t.contains("android:text=\"\"") && !t.contains("@string/") && !t.contains("android:text=\"@") && t.length > 20)
                 issues += LintIssue(ln, 1, "Hardcoded text — use string resource", LintSeverity.WARNING, "hardcoded-text")
-            if (t.contains("android:textColor="#") || t.contains("android:background="#"))
+            if (t.contains("android:textColor=\"#") || t.contains("android:background=\"#"))
                 issues += LintIssue(ln, 1, "Hardcoded color — use color resource", LintSeverity.WARNING, "hardcoded-color")
         }
         // Check well-formedness

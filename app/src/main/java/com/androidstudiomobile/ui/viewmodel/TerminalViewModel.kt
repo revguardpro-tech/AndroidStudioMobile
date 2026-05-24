@@ -29,9 +29,14 @@ class TerminalViewModel : ViewModel() {
     fun runCommand(cmd: String) {
         appendLine("$ $cmd")
         viewModelScope.launch(Dispatchers.IO) {
-            try { shellProcess?.outputStream?.apply { write("$cmd
-".toByteArray()); flush() }
-                  ?: run { val out = Runtime.getRuntime().exec(cmd).inputStream.bufferedReader().readText(); appendLine(out) }
+            try { 
+                shellProcess?.outputStream?.apply { 
+                    write("$cmd\n".toByteArray())
+                    flush() 
+                } ?: run { 
+                    val out = Runtime.getRuntime().exec(cmd).inputStream.bufferedReader().readText()
+                    appendLine(out) 
+                }
             } catch (e: Exception) { appendLine("Error: ${e.message}") }
         }
     }

@@ -42,21 +42,21 @@ class NewProjectViewModel(app: Application) : AndroidViewModel(app) {
         File(base, "app/src/main/java/$pkgPath").mkdirs()
         File(base, "app/src/main/res/layout").mkdirs()
         File(base, "app/src/main/res/values").mkdirs()
-        File(base, "app/src/main/java/$pkgPath/MainActivity.kt").writeText(
-            "package ${s.packageName}
-
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.material3.Text
-
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent { Text("Hello, ${s.name}!") }
-    }
-}
-")
+        File(base, "app/src/main/java/$pkgPath/MainActivity.kt").writeText("""
+            package ${s.packageName}
+            
+            import android.os.Bundle
+            import androidx.activity.ComponentActivity
+            import androidx.activity.compose.setContent
+            import androidx.compose.material3.Text
+            
+            class MainActivity : ComponentActivity() {
+                override fun onCreate(savedInstanceState: Bundle?) {
+                    super.onCreate(savedInstanceState)
+                    setContent { Text("Hello, ${s.name}!") }
+                }
+            }
+        """.trimIndent())
         File(base, "app/src/main/AndroidManifest.xml").writeText(
             """<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="${s.name}" android:theme="@style/Theme.Material3.DayNight"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>""")
         File(base, "app/src/main/res/values/strings.xml").writeText("""<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${s.name}</string></resources>""")

@@ -37,12 +37,9 @@ class ResourceManagerViewModel : ViewModel() {
     fun saveStrings() {
         viewModelScope.launch(Dispatchers.IO) {
             val f = File(_state.value.projectPath, "app/src/main/res/values/strings.xml")
-            val xml = "<?xml version="1.0" encoding="utf-8"?>
-<resources>
-" +
-                _state.value.strings.joinToString("
-") { "    <string name="${it.name}">${it.value}</string>" } + "
-</resources>"
+            val xml = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n" +
+                _state.value.strings.joinToString("\n") { "    <string name=\"${it.name}\">${it.value}</string>" } + 
+                "\n</resources>"
             f.parentFile?.mkdirs(); f.writeText(xml)
         }
     }
