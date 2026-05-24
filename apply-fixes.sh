@@ -1,19 +1,12 @@
 #!/usr/bin/env bash
-# apply-fixes.sh
-# Applies all Kotlin compilation fixes to the AndroidStudioMobile project.
-# Usage: bash apply-fixes.sh /path/to/AndroidStudioMobile
-# Or run from the project root: bash /path/to/apply-fixes.sh .
+# apply-fixes-lite.sh
+# Versão simplificada: pula a etapa [1/5] e aplica só as demais correções.
 
 set -e
 
 FIXES_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="${1:-.}"
 SRC="$PROJECT_DIR/app/src/main/java/com/androidstudiomobile"
-
-if [ ! -d "$PROJECT_DIR" ]; then
-  echo "ERROR: Project directory not found: $PROJECT_DIR"
-  exit 1
-fi
 
 copy() {
   local src="$FIXES_DIR/app/src/main/java/com/androidstudiomobile/$1"
@@ -24,14 +17,9 @@ copy() {
 }
 
 echo ""
-echo "=== Applying AndroidStudioMobile Kotlin fixes ==="
+echo "=== Applying remaining Kotlin fixes ==="
 echo "Project: $PROJECT_DIR"
 echo ""
-
-echo "[1/5] Creating missing build package..."
-copy "build/BuildModels.kt"
-copy "build/BuildEngine.kt"
-copy "build/GradleBuildEngine.kt"
 
 echo "[2/5] Fixing data models..."
 copy "data/model/Models.kt"
@@ -57,9 +45,9 @@ copy "ui/screens/DragDropLayoutEditor.kt"
 copy "ui/screens/ThemeEditorScreen.kt"
 
 echo ""
-echo "=== All fixes applied! ==="
+echo "=== All remaining fixes applied! ==="
 echo ""
 echo "Next steps:"
-echo "  1. git diff to review changes"
+echo "  1. git diff para revisar mudanças"
 echo "  2. ./gradlew assembleDebug"
 echo ""
