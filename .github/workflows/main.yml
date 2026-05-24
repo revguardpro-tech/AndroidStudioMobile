@@ -47,6 +47,14 @@ jobs:
         with:
           gradle-home-cache-cleanup: true
 
+      # ── Download gradle-wrapper.jar ──────────────────────────────────────
+      - name: Download gradle-wrapper.jar
+        run: |
+          mkdir -p gradle/wrapper
+          curl -L -o gradle/wrapper/gradle-wrapper.jar \
+            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
+          ls -lh gradle/wrapper/gradle-wrapper.jar
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -69,7 +77,7 @@ jobs:
         run: ./gradlew test --no-daemon
         continue-on-error: true
 
-      # ── Lint ─────────────────────────────────────────────────────────────
+      # ── Lint ──────────────────────────────────────────────────────────────
       - name: Run Android Lint
         run: ./gradlew lintDebug --no-daemon
         continue-on-error: true
@@ -118,6 +126,13 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+
+      # ── Download gradle-wrapper.jar ──────────────────────────────────────
+      - name: Download gradle-wrapper.jar
+        run: |
+          mkdir -p gradle/wrapper
+          curl -L -o gradle/wrapper/gradle-wrapper.jar \
+            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
 
       - name: Grant gradlew permission
         run: chmod +x gradlew
