@@ -1,0 +1,35 @@
+name: Fix Gradle Wrapper
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Download and setup Gradle wrapper
+        run: |
+          # Create gradle/wrapper directory if it doesn't exist
+          mkdir -p gradle/wrapper
+          
+          # Download gradle-wrapper.jar from official source
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
+          
+          # Verify the jar file was downloaded
+          ls -lh gradle/wrapper/gradle-wrapper.jar
+      
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add gradle/wrapper/gradle-wrapper.jar
+          git commit -m "Add gradle-wrapper.jar binary" || echo "No changes to commit"
+          git push
