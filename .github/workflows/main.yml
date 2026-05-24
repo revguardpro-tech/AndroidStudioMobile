@@ -117,8 +117,7 @@ jobs:
 
       - name: Download gradle-wrapper.jar from correct source
         run: |
-          curl -L -o gradle/wrapper/gradle-wrapper.jar \
-            https://services.gradle.org/distributions/gradle-8.7-wrapper.jar
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar
 
       - name: Grant gradlew permission
         run: chmod +x gradlew
