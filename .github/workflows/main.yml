@@ -44,7 +44,7 @@ jobs:
       - name: Download gradle-wrapper.jar from correct source
         run: |
           echo "Downloading gradle-wrapper.jar..."
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/...
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar
           echo "Download complete."
           ls -lh gradle/wrapper/gradle-wrapper.jar
           file gradle/wrapper/gradle-wrapper.jar
