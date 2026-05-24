@@ -27,38 +27,30 @@ jobs:
       version_code: ${{ steps.version.outputs.code }}
 
     steps:
-      # ── Checkout ────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ── Download gradle-wrapper.jar FIRST ────────────────────────────────
-      - name: Download gradle-wrapper.jar
-        run: |
-          mkdir -p gradle/wrapper
-          curl -L -o gradle/wrapper/gradle-wrapper.jar \
-            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
-          ls -lh gradle/wrapper/gradle-wrapper.jar
-
-      # ── Setup JDK ───────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      # ── Setup Gradle ─────────────────────────────────────────────────────
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-home-cache-cleanup: true
+      - name: Create gradle/wrapper directory
+        run: mkdir -p gradle/wrapper
+
+      - name: Download gradle-wrapper.jar
+        run: |
+          curl -L -o gradle/wrapper/gradle-wrapper.jar \
+            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
+          ls -lh gradle/wrapper/gradle-wrapper.jar
+          file gradle/wrapper/gradle-wrapper.jar
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # ── Extract version ──────────────────────────────────────────────────
       - name: Extract version info
         id: version
         run: |
@@ -68,21 +60,17 @@ jobs:
           echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "Version: $VERSION_NAME ($VERSION_CODE)"
 
-      # ── Build Debug APK ──────────────────────────────────────────────────
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # ── Run unit tests ───────────────────────────────────────────────────
       - name: Run unit tests
         run: ./gradlew test --no-daemon
         continue-on-error: true
 
-      # ── Lint ──────────────────────────────────────────────────────────────
       - name: Run Android Lint
         run: ./gradlew lintDebug --no-daemon
         continue-on-error: true
 
-      # ── Upload Lint results ───────────────────────────────────────────────
       - name: Upload lint results
         uses: actions/upload-artifact@v4
         if: always()
@@ -90,11 +78,9 @@ jobs:
           name: lint-results
           path: app/build/reports/lint-results-debug.html
 
-      # ── Build Release APK (sem assinatura) ──────────────────────────────
       - name: Build Release APK (unsigned)
         run: ./gradlew assembleRelease --no-daemon
 
-      # ── Upload Debug APK ─────────────────────────────────────────────────
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -102,7 +88,6 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      # ── Upload Release APK (não assinado) ────────────────────────────────
       - name: Upload Release APK (unsigned)
         uses: actions/upload-artifact@v4
         with:
@@ -110,7 +95,6 @@ jobs:
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
 
-  # ── Job de assinatura ───────────────────────────────────────────────────
   sign:
     name: Sign Release APK
     runs-on: ubuntu-latest
@@ -121,23 +105,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Download gradle-wrapper.jar FIRST ────────────────────────────────
-      - name: Download gradle-wrapper.jar
-        run: |
-          mkdir -p gradle/wrapper
-          curl -L -o gradle/wrapper/gradle-wrapper.jar \
-            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Create gradle/wrapper directory
+        run: mkdir -p gradle/wrapper
+
+      - name: Download gradle-wrapper.jar
+        run: |
+          curl -L -o gradle/wrapper/gradle-wrapper.jar \
+            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
+
       - name: Grant gradlew permission
         run: chmod +x gradlew
 
-      # ── Decodificar keystore dos secrets ─────────────────────────────────
       - name: Decode keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -145,7 +129,6 @@ jobs:
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
 
-      # ── Build e assinar com keystore ─────────────────────────────────────
       - name: Build Signed Release APK
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -162,7 +145,6 @@ jobs:
             -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
             --no-daemon
 
-      # ── Verificar assinatura com apksigner ───────────────────────────────
       - name: Verify APK signature
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -172,7 +154,6 @@ jobs:
           echo "APK encontrado: $APK_PATH"
           ${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)/apksigner verify --verbose $APK_PATH || true
 
-      # ── Upload APK assinado ──────────────────────────────────────────────
       - name: Upload Signed Release APK
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -182,7 +163,6 @@ jobs:
           name: android-studio-mobile-release-signed-v${{ needs.build.outputs.version_name }}
           path: app/build/outputs/apk/release/app-release.apk
 
-      # ── Criar GitHub Release automaticamente em tags ─────────────────────
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
@@ -220,7 +200,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── Limpar keystore da memória ────────────────────────────────────────
       - name: Cleanup keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
