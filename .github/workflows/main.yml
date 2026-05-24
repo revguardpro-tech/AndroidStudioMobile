@@ -93,7 +93,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Download Release APK from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: android-studio-mobile-release-unsigned-v${{ needs.build.outputs.version_name }}
+          path: app/build/outputs/apk/release/
+          
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
