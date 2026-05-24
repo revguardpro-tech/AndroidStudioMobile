@@ -21,7 +21,7 @@ jobs:
           mkdir -p gradle/wrapper
           
           # Download gradle-wrapper.jar from official source
-          curl -L -o https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.9.0/gradle/wrapper/gradle-wrapper.jar
           
           # Verify the jar file was downloaded
           ls -lh gradle/wrapper/gradle-wrapper.jar
