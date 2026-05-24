@@ -38,36 +38,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create gradle/wrapper directory and verify
-        run: |
-          mkdir -p gradle/wrapper
-          ls -la gradle/
+      - name: Create gradle/wrapper directory
+        run: mkdir -p gradle/wrapper
 
-      - name: Download gradle-wrapper.jar with verification
+      - name: Download gradle-wrapper.jar from correct source
         run: |
           echo "Downloading gradle-wrapper.jar..."
-          curl -L -v -o gradle/wrapper/gradle-wrapper.jar \
-            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
-          echo "Download complete. Verifying file..."
+          curl -L -o gradle/wrapper/gradle-wrapper.jar \
+            https://services.gradle.org/distributions/gradle-8.7-wrapper.jar
+          echo "Download complete."
           ls -lh gradle/wrapper/gradle-wrapper.jar
           file gradle/wrapper/gradle-wrapper.jar
-          echo "File size check:"
-          wc -c gradle/wrapper/gradle-wrapper.jar
 
       - name: Grant execute permission for gradlew
-        run: |
-          chmod +x gradlew
-          ls -la gradlew
-
-      - name: Verify gradlew can find the JAR
-        run: |
-          echo "CLASSPATH should include gradle/wrapper/gradle-wrapper.jar"
-          echo "Looking for JAR file:"
-          find . -name "gradle-wrapper.jar" -type f
-          echo "Current working directory:"
-          pwd
-          echo "Directory structure:"
-          ls -la gradle/wrapper/
+        run: chmod +x gradlew
 
       - name: Extract version info
         id: version
@@ -132,10 +116,10 @@ jobs:
       - name: Create gradle/wrapper directory
         run: mkdir -p gradle/wrapper
 
-      - name: Download gradle-wrapper.jar
+      - name: Download gradle-wrapper.jar from correct source
         run: |
           curl -L -o gradle/wrapper/gradle-wrapper.jar \
-            https://repo1.maven.org/maven2/org/gradle/gradle-wrapper/8.7/gradle-wrapper-8.7.jar
+            https://services.gradle.org/distributions/gradle-8.7-wrapper.jar
 
       - name: Grant gradlew permission
         run: chmod +x gradlew
